@@ -1,0 +1,9 @@
+# Ray certification project dependencies
+# Note: Ray does not yet support Python 3.14
+# When a compatible Python version is available, install ray with:
+# .venv/bin/pip install ray
+
+# Current installed packages (from Poetry):
+# - pandas
+# - fastapi
+# - pytest (dev)

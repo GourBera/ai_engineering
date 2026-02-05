@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "etl_tool"
+version = "0.1.0"
+description = "Production-grade ETL tool using pandas."
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "etl_tool", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.15"
+pandas = "^2.2.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pyspark_app"
+version = "0.1.0"
+description = "Production-grade PySpark application."
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "pyspark_app", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.15"
+pyspark = "^4.1.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

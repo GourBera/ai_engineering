@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "agintic_ai"
+version = "0.1.0"
+description = "Prompting for LLM Reasoning and Planning"
+authors = ["Your Name <your.email@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+ipykernel = "^7.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
