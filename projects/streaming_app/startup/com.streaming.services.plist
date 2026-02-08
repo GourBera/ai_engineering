@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service Label -->
+    <key>Label</key>
+    <string>com.streaming.services</string>
+    
+    <!-- Program to Run -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/gourbera/ai_engineering/projects/streaming_app/startup/auto-start-services.sh</string>
+    </array>
+    
+    <!-- Working Directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/gourbera/ai_engineering/projects/streaming_app</string>
+    
+    <!-- Run at Load (system startup) -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep Alive - restart if it exits -->
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Only keep alive if it crashes, not after successful completion -->
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <!-- Wait for OrbStack to be ready before starting -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+    
+    <!-- Environment Variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>/Users/gourbera</string>
+    </dict>
+    
+    <!-- Standard Output and Error Logs -->
+    <key>StandardOutPath</key>
+    <string>/tmp/streaming_app/launchagent-stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/tmp/streaming_app/launchagent-stderr.log</string>
+    
+    <!-- Process Type -->
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <!-- Session Type -->
+    <key>LimitLoadToSessionType</key>
+    <array>
+        <string>Aqua</string>
+    </array>
+    
+    <!-- Throttle Restart -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+</dict>
+</plist>

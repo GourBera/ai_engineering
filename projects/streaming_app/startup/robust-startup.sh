@@ -22,6 +22,8 @@ SPARK_SVC="spark-master"
 # Ports
 REDIS_PORT="6379"
 KAFKA_PORT="9092"
+KAFKA_UI_PORT="8081"
+REDIS_UI_PORT="5540"
 SPARK_UI_PORT="8080"
 SPARK_MASTER_PORT="7077"
 
@@ -188,6 +190,22 @@ deploy_services() {
     else
         log "✓ Spark Master is already deployed in namespace $SPARK_NS"
     fi
+    
+    # Check Kafka UI
+    if ! kubectl get pods -n "$KAFKA_NS" -l app=kafka-ui > /dev/null 2>&1; then
+        log "Deploying Kafka UI..."
+        deploy_kafka_ui || warn "Kafka UI deployment failed"
+    else
+        log "✓ Kafka UI is already deployed in namespace $KAFKA_NS"
+    fi
+    
+    # Check Redis UI
+    if ! kubectl get pods -n "$REDIS_NS" -l app=redis-ui > /dev/null 2>&1; then
+        log "Deploying Redis UI..."
+        deploy_redis_ui || warn "Redis UI deployment failed"
+    else
+        log "✓ Redis UI is already deployed in namespace $REDIS_NS"
+    fi
 }
 
 # Deploy Spark Master if it doesn't exist
@@ -286,6 +304,184 @@ SPARKEOF
         return 1
     else
         error "Failed to deploy Spark Master"
+        return 1
+    fi
+}
+
+# Deploy Kafka UI
+deploy_kafka_ui() {
+    local kafka_ui_yaml
+    kafka_ui_yaml=$(cat << 'KAFKAUIEOF'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  namespace: kafka
+  labels:
+    app: kafka-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+    spec:
+      containers:
+      - name: kafka-ui
+        image: docker.io/provectuslabs/kafka-ui:latest
+        ports:
+        - containerPort: 8080
+          name: web
+        env:
+        - name: KAFKA_CLUSTERS_0_NAME
+          value: "my-kafka"
+        - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+          value: "my-kafka-kafka-bootstrap:9092"
+        - name: KAFKA_CLUSTERS_0_ZOOKEEPER_ENABLED
+          value: "false"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui-svc
+  namespace: kafka
+  labels:
+    app: kafka-ui
+spec:
+  selector:
+    app: kafka-ui
+  ports:
+  - port: 8080
+    name: web
+    targetPort: 8080
+  type: ClusterIP
+KAFKAUIEOF
+)
+    
+    if echo "$kafka_ui_yaml" | kubectl apply -f - 2>/dev/null; then
+        log "✓ Kafka UI deployment created"
+        
+        local max_attempts=30
+        local attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+            local ready_pods
+            ready_pods=$(kubectl get deployment kafka-ui -n "$KAFKA_NS" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+            
+            if [ "$ready_pods" = "1" ]; then
+                log "✓ Kafka UI pod is ready"
+                return 0
+            fi
+            
+            info "Attempt $attempt/$max_attempts: Waiting for Kafka UI pod to be ready..."
+            sleep 2
+            ((attempt++))
+        done
+        
+        warn "Kafka UI pod did not become ready within ${max_attempts} attempts"
+        return 1
+    else
+        error "Failed to deploy Kafka UI"
+        return 1
+    fi
+}
+
+# Deploy Redis UI
+deploy_redis_ui() {
+    local redis_ui_yaml
+    redis_ui_yaml=$(cat << 'REDISUIEOF'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-ui
+  namespace: redis
+  labels:
+    app: redis-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-ui
+  template:
+    metadata:
+      labels:
+        app: redis-ui
+    spec:
+      containers:
+      - name: redis-ui
+        image: docker.io/eqalpha/localpilot:latest
+        ports:
+        - containerPort: 5540
+          name: web
+        env:
+        - name: VITE_REDIS_HOST
+          value: "redis-master"
+        - name: VITE_REDIS_PORT
+          value: "6379"
+        - name: VITE_REDIS_PASSWORD
+          value: ""
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-ui-svc
+  namespace: redis
+  labels:
+    app: redis-ui
+spec:
+  selector:
+    app: redis-ui
+  ports:
+  - port: 5540
+    name: web
+    targetPort: 5540
+  type: ClusterIP
+REDISUIEOF
+)
+    
+    if echo "$redis_ui_yaml" | kubectl apply -f - 2>/dev/null; then
+        log "✓ Redis UI deployment created"
+        
+        local max_attempts=30
+        local attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+            local ready_pods
+            ready_pods=$(kubectl get deployment redis-ui -n "$REDIS_NS" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+            
+            if [ "$ready_pods" = "1" ]; then
+                log "✓ Redis UI pod is ready"
+                return 0
+            fi
+            
+            info "Attempt $attempt/$max_attempts: Waiting for Redis UI pod to be ready..."
+            sleep 2
+            ((attempt++))
+        done
+        
+        warn "Redis UI pod did not become ready within ${max_attempts} attempts"
+        return 1
+    else
+        error "Failed to deploy Redis UI"
         return 1
     fi
 }
@@ -517,6 +713,10 @@ start_services() {
     start_portforward "$SPARK_NS" "spark-master-svc" "$SPARK_UI_PORT" "$LOG_DIR/spark-ui-portforward.log" || warn "Spark UI port-forward failed"
     start_portforward "$SPARK_NS" "spark-master-svc" "$SPARK_MASTER_PORT" "$LOG_DIR/spark-master-portforward.log" || warn "Spark Master port-forward failed"
     
+    # Start UI port-forwards
+    start_portforward "$KAFKA_NS" "kafka-ui-svc" "$KAFKA_UI_PORT" "$LOG_DIR/kafka-ui-portforward.log" || warn "Kafka UI port-forward failed"
+    start_portforward "$REDIS_NS" "redis-ui-svc" "$REDIS_UI_PORT" "$LOG_DIR/redis-ui-portforward.log" || warn "Redis UI port-forward failed"
+    
     # Set environment variables
     set_environment
     
@@ -524,7 +724,9 @@ start_services() {
     echo ""
     echo "=== Service Access Information ==="
     echo "Redis: localhost:$REDIS_PORT (password: \${REDIS_PASSWORD})"
+    echo "Redis UI: http://localhost:$REDIS_UI_PORT"
     echo "Kafka: localhost:$KAFKA_PORT"
+    echo "Kafka UI: http://localhost:$KAFKA_UI_PORT"
     echo "Spark UI: http://localhost:$SPARK_UI_PORT"
     echo "Spark Master: spark://localhost:$SPARK_MASTER_PORT"
     echo ""
@@ -541,6 +743,8 @@ stop_services() {
     kill_existing_portforward "$KAFKA_SVC" "$KAFKA_PORT"
     kill_existing_portforward "spark-master-svc" "$SPARK_UI_PORT"
     kill_existing_portforward "spark-master-svc" "$SPARK_MASTER_PORT"
+    kill_existing_portforward "kafka-ui-svc" "$KAFKA_UI_PORT"
+    kill_existing_portforward "redis-ui-svc" "$REDIS_UI_PORT"
     
     log "✓ All services stopped"
 }
@@ -581,6 +785,20 @@ check_status() {
         echo "✗ Spark UI port-forward is not running"
     fi
     
+    # Check Kafka UI
+    if ps -ef | grep "kubectl port-forward" | grep -v grep | grep "kafka-ui-svc.*$KAFKA_UI_PORT" > /dev/null; then
+        echo "✓ Kafka UI port-forward is running (localhost:$KAFKA_UI_PORT)"
+    else
+        echo "✗ Kafka UI port-forward is not running"
+    fi
+    
+    # Check Redis UI
+    if ps -ef | grep "kubectl port-forward" | grep -v grep | grep "redis-ui-svc.*$REDIS_UI_PORT" > /dev/null; then
+        echo "✓ Redis UI port-forward is running (localhost:$REDIS_UI_PORT)"
+    else
+        echo "✗ Redis UI port-forward is not running"
+    fi
+    
     echo ""
     echo "=== Service Connectivity ==="
     
@@ -603,6 +821,20 @@ check_status() {
         echo "✓ Spark UI is accessible on port $SPARK_UI_PORT"
     else
         echo "✗ Spark UI is not accessible on port $SPARK_UI_PORT"
+    fi
+    
+    # Test Kafka UI
+    if nc -z localhost "$KAFKA_UI_PORT" 2>/dev/null; then
+        echo "✓ Kafka UI is accessible on port $KAFKA_UI_PORT"
+    else
+        echo "✗ Kafka UI is not accessible on port $KAFKA_UI_PORT"
+    fi
+    
+    # Test Redis UI
+    if nc -z localhost "$REDIS_UI_PORT" 2>/dev/null; then
+        echo "✓ Redis UI is accessible on port $REDIS_UI_PORT"
+    else
+        echo "✗ Redis UI is not accessible on port $REDIS_UI_PORT"
     fi
 }
 

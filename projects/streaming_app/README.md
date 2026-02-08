@@ -72,6 +72,10 @@ Spark Master is automatically deployed when you run the startup script. The depl
 ### Kafka
 - **Bootstrap:** `localhost:9092`
 - **Topics:** Auto-created as needed
+- **UI:** `http://localhost:8081` (Kafka UI - manage topics, view messages, monitor cluster)
+
+### Redis
+- **UI:** `http://localhost:5540` (Redis UI - view keys, monitor connections)
 
 ### Spark Master
 - **UI:** `http://localhost:8080` (Spark Master Web UI - shows workers and running/completed applications)
@@ -143,7 +147,15 @@ SPARK_MASTER_URL=spark://localhost:7077
 SPARK_UI_URL=http://localhost:8080
 ```
 
-## Testing
+## Web UIs Access
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| **Kafka UI** | `http://localhost:8081` | Manage topics, view messages, monitor cluster health |
+| **Redis UI** | `http://localhost:5540` | Browse keys, monitor connections, execute commands |
+| **Spark Master** | `http://localhost:8080` | View workers and running/completed applications |
+| **Spark Application** | `http://localhost:4040` | View running job details (while job is running) |
+
 
 ### Full Test Suite
 ```bash
