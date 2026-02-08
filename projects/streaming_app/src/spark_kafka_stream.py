@@ -1,7 +1,8 @@
 from pyspark.sql import SparkSession
 
-# Update this to match your Kafka internal bootstrap service in Kubernetes:
-KAFKA_BOOTSTRAP = "my-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+# Use localhost for local Kafka access (from port-forward)
+# Change to "my-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092" if running in Kubernetes
+KAFKA_BOOTSTRAP = "localhost:9092"
 TOPIC = "my_first_topic"
 
 def main():

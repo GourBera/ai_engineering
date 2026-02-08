@@ -1,12 +1,170 @@
-export SPARK_HOME="/opt/homebrew/opt/apache-spark/libexec"
-export SPARK_LOG_DIR=/home/workspace/spark/logs
-export SPARK_WORKER_DIR=/home/workspace/spark
+#!/usr/bin/env bash
 
-if [ -z "${SPARK_HOME}" ]; then
-  source "$(dirname "$0")"/find-spark-home
+# spark-submit wrapper script
+# Usage: ./startup/spark-submit [options] script.py
+# Example: ./startup/spark-submit spark-job.py
+#          ./startup/spark-submit --name my-job script.py
+
+set -e
+
+# Set Java 21 as default for Hadoop compatibility with Spark
+# Java 25 removed getSubject() which Hadoop 3.4.2 requires
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Default values - use local mode for better reliability on single machine
+MASTER="local[*]"
+DRIVER_MEMORY="1g"
+EXECUTOR_MEMORY="1g"
+NUM_EXECUTORS="1"
+JOB_NAME=""
+PACKAGES=""
+
+# Parse arguments
+SCRIPT_PATH=""
+EXTRA_ARGS=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --name)
+            JOB_NAME="$2"
+            shift 2
+            ;;
+        --master)
+            MASTER="$2"
+            shift 2
+            ;;
+        --driver-memory)
+            DRIVER_MEMORY="$2"
+            shift 2
+            ;;
+        --executor-memory)
+            EXECUTOR_MEMORY="$2"
+            shift 2
+            ;;
+        --num-executors)
+            NUM_EXECUTORS="$2"
+            shift 2
+            ;;
+        --packages)
+            PACKAGES="$2"
+            shift 2
+            ;;
+        --help)
+            echo "Spark Job Submission Script"
+            echo ""
+            echo "Usage: $(basename "$0") [options] script.py"
+            echo ""
+            echo "Options:"
+            echo "  --name NAME              Job name (appears in Spark UI)"
+            echo "  --master URL             Spark Master URL (default: local[*] - uses all cores locally)"
+            echo "  --driver-memory MEM      Driver memory (default: 1g)"
+            echo "  --executor-memory MEM    Executor memory (default: 1g)"
+            echo "  --num-executors N        Number of executors (default: 1)"
+            echo "  --packages PKG           Spark packages to install (e.g., org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0)"
+            echo "  --help                   Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $(basename "$0") spark-job.py                              # Run on local machine"
+            echo "  $(basename "$0") --name my-job spark-job.py                # With custom name"
+            echo "  $(basename "$0") --master spark://localhost:7077 spark-job.py  # Submit to Spark Master"
+            exit 0
+            ;;
+        -*)
+            EXTRA_ARGS="$EXTRA_ARGS $1"
+            shift
+            ;;
+        *)
+            SCRIPT_PATH="$1"
+            shift
+            ;;
+    esac
+done
+
+# Validate script path
+if [ -z "$SCRIPT_PATH" ]; then
+    echo "❌ Error: No script provided"
+    echo "Usage: $(basename "$0") script.py"
+    echo "Run '$(basename "$0") --help' for more information"
+    exit 1
 fi
 
-# disable randomized hash for string in Python 3.3+
-export PYTHONHASHSEED=0
+# Resolve script path (handle relative paths)
+if [[ "$SCRIPT_PATH" == /* ]]; then
+    RESOLVED_SCRIPT="$SCRIPT_PATH"
+else
+    RESOLVED_SCRIPT="$PROJECT_ROOT/src/$SCRIPT_PATH"
+fi
 
-exec "${SPARK_HOME}"/bin/spark-class org.apache.spark.deploy.SparkSubmit "$@"
+# Check if script exists
+if [ ! -f "$RESOLVED_SCRIPT" ]; then
+    echo "❌ Error: Script not found: $RESOLVED_SCRIPT"
+    exit 1
+fi
+
+# Determine job name
+if [ -z "$JOB_NAME" ]; then
+    JOB_NAME=$(basename "$RESOLVED_SCRIPT" .py)
+fi
+
+# Auto-detect Kafka jobs and add packages
+if [[ "$SCRIPT_PATH" == *"kafka"* ]] && [ -z "$PACKAGES" ]; then
+    PACKAGES="org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1"
+fi
+
+# Display submission info
+echo "======================================================================"
+echo "Spark Job Submission"
+echo "======================================================================"
+echo "Master:           $MASTER"
+echo "Job Name:         $JOB_NAME"
+echo "Script:           $RESOLVED_SCRIPT"
+echo "Driver Memory:    $DRIVER_MEMORY"
+echo "Executor Memory:  $EXECUTOR_MEMORY"
+echo "Num Executors:    $NUM_EXECUTORS"
+echo "======================================================================"
+echo ""
+
+if [[ "$MASTER" == "local"* ]]; then
+    echo "📊 Running locally on all available cores"
+    echo "📊 Application UI: http://localhost:4040"
+else
+    echo "📊 Monitor job at: http://localhost:8080"
+    echo "📊 Application UI: http://localhost:4040"
+fi
+
+echo ""
+echo "======================================================================"
+echo ""
+
+# Build spark-submit command
+SPARK_CMD="spark-submit"
+SPARK_CMD="$SPARK_CMD --master $MASTER"
+SPARK_CMD="$SPARK_CMD --name $JOB_NAME"
+SPARK_CMD="$SPARK_CMD --driver-memory $DRIVER_MEMORY"
+SPARK_CMD="$SPARK_CMD --executor-memory $EXECUTOR_MEMORY"
+
+# Only add num-executors for non-local mode
+if [[ "$MASTER" != "local"* ]]; then
+    SPARK_CMD="$SPARK_CMD --num-executors $NUM_EXECUTORS"
+fi
+
+# Add packages if specified
+if [ -n "$PACKAGES" ]; then
+    SPARK_CMD="$SPARK_CMD --packages $PACKAGES"
+fi
+
+# Add extra arguments if any
+if [ -n "$EXTRA_ARGS" ]; then
+    SPARK_CMD="$SPARK_CMD $EXTRA_ARGS"
+fi
+
+# Add script path
+SPARK_CMD="$SPARK_CMD $RESOLVED_SCRIPT"
+
+# Execute spark-submit
+echo "Executing: $SPARK_CMD"
+echo ""
+eval "$SPARK_CMD"

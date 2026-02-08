@@ -1,20 +1,42 @@
-import os
 from kafka import KafkaProducer, KafkaConsumer
 import time
+from service_config import KAFKA_BOOTSTRAP_SERVERS
 
-# Use KAFKA_BOOTSTRAP env var if provided, otherwise default to localhost:9092
-bootstrap = os.environ.get('KAFKA_BOOTSTRAP', 'localhost:9092')
-print(f"Using Kafka bootstrap servers: {bootstrap}")
+print(f"Connecting to Kafka at {KAFKA_BOOTSTRAP_SERVERS}...")
 
-producer = KafkaProducer(bootstrap_servers=bootstrap)
-producer.send('test-topic', b'Hello, Kafka!')
-producer.flush()
-print('Message sent to Kafka!')
-
-time.sleep(1)  # Wait for message to be available
-
-consumer = KafkaConsumer('test-topic', bootstrap_servers=bootstrap, auto_offset_reset='earliest', consumer_timeout_ms=2000)
-for msg in consumer:
-    print('Received from Kafka:', msg.value)
-    break
-consumer.close()
+try:
+    # Create producer
+    producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
+    print("✓ Successfully connected to Kafka (producer)")
+    
+    # Send a message
+    producer.send('test-topic', b'Hello, Kafka from Python!')
+    producer.flush()
+    print("✓ Message sent to Kafka topic 'test-topic'")
+    
+    time.sleep(1)  # Wait for message to be available
+    
+    # Create consumer
+    consumer = KafkaConsumer(
+        'test-topic',
+        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        auto_offset_reset='earliest',
+        consumer_timeout_ms=5000
+    )
+    print("✓ Successfully connected to Kafka (consumer)")
+    
+    # Read messages
+    message_count = 0
+    for msg in consumer:
+        print(f"✓ Received from Kafka: {msg.value.decode('utf-8')}")
+        message_count += 1
+        if message_count >= 3:  # Read up to 3 messages
+            break
+    
+    consumer.close()
+    producer.close()
+    print(f"\n✓ Successfully sent and received {message_count} message(s)")
+    
+except Exception as e:
+    print(f"✗ Error connecting to Kafka: {e}")
+    print("Make sure the services are started with ./startup/robust-startup.sh start")

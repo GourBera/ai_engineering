@@ -6,8 +6,6 @@ This monorepo contains multiple data engineering and AI subprojects, each with i
 - projects/
   - agintic_ai/: Notebooks on prompting, reasoning, and planning
   - airflow/: Airflow stack with sample DAGs and config
-  - etl_tool/: Pandas-based ETL pipeline
-  - pyspark_app/: PySpark-based data processing
   - ray_certification/: Ray training, data, and serve notebooks
   - streaming_app/: Kafka/Redis/Spark streaming examples
 
